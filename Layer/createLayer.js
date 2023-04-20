@@ -5,10 +5,11 @@ import MVT from 'ol/format/MVT';
 import olms, { applyStyle } from "ol-mapbox-style";
 
 //fonction qui permet de créer des couches
-export function createLayer(layerUrl, layerStyleurl = null, layerName, format, style = null) {
+export function createLayer(layerUrl, layerName, format, cacheSize=null, style = null) {
     let newLayer =  new VectorTileLayer({
       source: new VectorTileSource({
         format: format,
+        cacheSize : cacheSize,
         url: layerUrl
       }),
       declutter: true,
@@ -16,8 +17,8 @@ export function createLayer(layerUrl, layerStyleurl = null, layerName, format, s
       visible: true,
       renderMode: "vector",
       srcName: layerName,
-      styleUrl: layerStyleurl,
-      style: style
+      style: style, 
+      renderBuffer: cacheSize
     });
 
   

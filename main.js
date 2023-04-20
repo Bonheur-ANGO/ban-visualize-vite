@@ -7,9 +7,9 @@ import { fromLonLat } from 'ol/proj';
 import MVT from 'ol/format/MVT';
 import { createLayer } from './Layer/createLayer';
 import { styleLayer } from './Layer/styleLayer';
-import {Circle, Fill, Stroke, Style} from 'ol/style';
-import {createXYZ} from 'ol/tilegrid';
-
+import {Circle, Fill, Stroke, Style, Text} from 'ol/style';
+import {Deck} from '@deck.gl/core';
+import {MVTLayer} from '@deck.gl/geo-layers';
 
 
 
@@ -17,10 +17,12 @@ import {createXYZ} from 'ol/tilegrid';
 let standard = 'https://wxs.ign.fr/static/vectorTiles/styles/PLAN.IGN/essentiels/standard.json';
 
 //fond de carte
-let plan_ign = createLayer('https://wxs.ign.fr/essentiels/geoportail/tms/1.0.0/PLAN.IGN/{z}/{x}/{y}.pbf', standard, 'plan_ign', new MVT());
+let plan_ign = createLayer('https://wxs.ign.fr/essentiels/geoportail/tms/1.0.0/PLAN.IGN/{z}/{x}/{y}.pbf', 'plan_ign', new MVT());
+
+let ban = createLayer('https://plateforme.adresse.data.gouv.fr/tiles/ban/{z}/{x}/{y}.pbf', 'ban', new MVT(), 100);
 
 
-function createAddressStyle(feature) {
+/*function createAddressStyle(feature) {
   return new Style({
     text: new Text({
       text: feature.get('label'),
@@ -53,11 +55,46 @@ let vectorTileLayer = new VectorTile({
 
   visible: true,
   style: createAddressStyle
-});
+});*/
+
+
 
 //tableau de couches
-let layers = [plan_ign];
+let layers = [plan_ign, ban];
 
+//style ban
+function createBanStyle(feature) {
+
+  const baseTextStyle = {
+    textBaseline: 'middle',
+    textAlign: 'center',
+    font: 'bold 12px sans-serif',
+    fill: new Fill({ color: '#000' }),
+    stroke: new Stroke({ color: '#fff', width: 2 }),
+  };
+
+  const textStyle = {
+    ...baseTextStyle,
+    text: feature.get('name'),
+  };
+
+  return new Style({
+    image: new Circle({
+      radius: 5,
+      fill: new Fill({ color: '#3388ff' }),
+      stroke: new Stroke({ color: '#fff', width: 1 }),
+    }),
+    text: new Text(textStyle),
+  });
+
+
+}
+
+ban.setStyle(createBanStyle)
+console.log(ban);
+
+//adding layer style
+styleLayer(plan_ign, standard)
 
 //création de la carte
 var map = new Map({
@@ -66,10 +103,56 @@ var map = new Map({
   view: new View({
     maxZoom: 25,
     center: fromLonLat([1.8883335, 46.603354]),
-    zoom: 5  })
+    zoom: 6  })
 });
 
-styleLayer(map.getLayers().array_)
+
+
+const deck = new Deck({
+  canvas: 'deck-canvas',
+  width: '100%',
+  height: '100%',
+  initialViewState: {
+    longitude: 0,
+    latitude: 0,
+    zoom: 1,
+    pitch: 0,
+    bearing: 0,
+  },
+  controller: true,
+  onViewStateChange: ({ viewState }) => {
+    map.getView().setCenter([viewState.longitude, viewState.latitude]);
+    map.getView().setZoom(viewState.zoom);
+  },
+  layers: [
+    new MVTLayer({
+      id: 'ban-layer',
+      data: 'https://url-to-ban-vector-tiles/{z}/{x}/{y}.pbf', // Remplacez par l'URL de l'API de tuiles vectorielles de la BAN
+      minZoom: 12, // Ajustez cette valeur en fonction de vos besoins
+      maxZoom: 19, // Ajustez cette valeur en fonction de vos besoins
+      getFillColor: [255, 0, 0, 255],
+      getRadius: 5,
+      pointRadiusMinPixels: 2,
+      pointRadiusMaxPixels: 10,
+      lineWidthMinPixels: 1,
+      pickable: true
+    }),
+  ],
+});
+
+
+map.on('postrender', () => {
+  const viewState = {
+    longitude: map.getView().getCenter()[0],
+    latitude: map.getView().getCenter()[1],
+    zoom: map.getView().getZoom(),
+    pitch: 0,
+    bearing: 0,
+  };
+  deck.setProps({ viewState });
+});
+
+
 
 //map.addLayer(vectorTileLayer)
 
@@ -80,7 +163,7 @@ function viewFeatureAndCenterMap(feature) {
 
   view.animate({
     center: fromLonLat(feature.geometry.coordinates),
-    zoom: 13,
+    zoom: 16,
     duration: 500
   })
   
@@ -129,7 +212,7 @@ function displayProposition(response) {
               source
             })*/
             //map.addLayer(newVectorLayer)
-            //console.log(feature);
+            console.log(element);
           })
 
       });
@@ -155,7 +238,7 @@ function getFeaturesAndAutocomplete() {
   
 }
 
-//getFeaturesAndAutocomplete()
+getFeaturesAndAutocomplete()
 
 async function processLocalCsvFile(csvFilePath) {
   // Charger le fichier CSV local
@@ -204,4 +287,59 @@ async function processLocalCsvFile(csvFilePath) {
 }
 
 const csvFilePath = "./search.csv";
-console.log(processLocalCsvFile(csvFilePath));;
+
+
+async function processCsvGzFile(csvGzFilePath) {
+  // Charger le fichier CSV.gz local
+  const response = await fetch(csvGzFilePath);
+  const compressedData = await response.arrayBuffer();
+
+  // Décompresser le fichier CSV.gz
+  gunzip(new Uint8Array(compressedData), (error, decompressedDataArray) => {
+    if (error) {
+      console.error('Erreur lors de la décompression :', error);
+      return;
+    }
+
+    const decompressedData = new TextDecoder().decode(decompressedDataArray);
+
+    // Traiter les lignes du fichier CSV décompressé
+    const lines = decompressedData.split('\n');
+    const headers = lines.shift().split(',');
+
+    const lonIndex = headers.indexOf('lon');
+    const latIndex = headers.indexOf('lat');
+
+    /*lines.forEach((line) => {
+      const values = line.split(',');
+      const lon = parseFloat(values[lonIndex]);
+      const lat = parseFloat(values[latIndex]);
+
+      if (!isNaN(lon) && !isNaN(lat)) {
+        addMarker(lon, lat);
+      }
+    });*/
+  });
+}
+
+/*function addMarker(lon, lat) {
+  const marker = new Feature({
+    geometry: new Point(fromLonLat([lon, lat])),
+  });
+
+  marker.setStyle(
+    new Style({
+      image: new Icon({
+        src: 'path/to/marker/icon.png',
+      }),
+    })
+  );
+
+  vectorSource.addFeature(marker);
+}*/
+
+const csvGzFilePath = "./adresses-01.csv.gz";
+//processCsvGzFile(csvGzFilePath);
+
+
+

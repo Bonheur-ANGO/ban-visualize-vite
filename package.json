@@ -12,7 +12,14 @@
     "vite": "^4.2.0"
   },
   "dependencies": {
+    "@deck.gl/core": "^8.9.8",
+    "@deck.gl/geo-layers": "^8.9.8",
+    "@deck.gl/layers": "^8.9.8",
+    "deck.gl": "^8.9.8",
+    "fflate": "^0.7.4",
     "ol": "^7.3.0",
-    "ol-mapbox-style": "^10.5.0"
+    "ol-mapbox-style": "^10.5.0",
+    "pako": "^2.1.0",
+    "zlib": "^1.0.5"
   }
 }
